@@ -1,0 +1,6 @@
+# CloudLab temporary artifacts
+*.log
+*.tmp
+*.env
+.DS_Store
+__pycache__/
