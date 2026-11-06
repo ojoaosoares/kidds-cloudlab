@@ -21,6 +21,7 @@ set -euo pipefail
 
 DURATION="${1:-30}"
 ATTACKERS_LIST="${2:-100 500 1000 2500 5000}"
+ATTACK_MODE="${3:-headers}"
 ENV_FILE="${HOME}/KIDDS/cloudlab.env"
 
 if [ -f "${ENV_FILE}" ]; then
@@ -38,8 +39,9 @@ mkdir -p "${RESULTS_DIR}"
 SSH_CLIENT="ssh -o StrictHostKeyChecking=accept-new ${PEER_A_IP}"
 SSH_SERVER="ssh -o StrictHostKeyChecking=accept-new ${PEER_B_IP}"
 
-# Distribute wrk_report.lua to client
+# Distribute wrk_report.lua and slowloris_suite.py to client
 scp -o StrictHostKeyChecking=accept-new "${SCRIPT_DIR}/wrk_report.lua" "${PEER_A_IP}:/tmp/wrk_report.lua" >/dev/null 2>&1 || true
+scp -o StrictHostKeyChecking=accept-new "${SCRIPT_DIR}/slowloris_suite.py" "${PEER_A_IP}:/tmp/slowloris_suite.py" >/dev/null 2>&1 || true
 
 source "${SCRIPT_DIR}/bench_env.sh"
 bench_env_setup 0
@@ -94,9 +96,27 @@ for ATTACKERS in ${ATTACKERS_LIST}; do
             echo "[KIDDS] Baseline ativo (roteamento limpo de kernel)."
         fi
 
-        # 2. Inicia ataque no Cliente
-        echo "[CLIENT] Disparando Slowloris com ${ATTACKERS} conexoes..."
-        ${SSH_CLIENT} "nohup slowhttptest -c ${ATTACKERS} -H -g -i 5 -r 200 -t GET -u http://${SERVER_IP}:80/ -x 24 -p 3 -l $((DURATION + 5)) > /dev/null 2>&1 &"
+        # 2. Inicia ataque no Cliente conforme o modo selecionado
+        echo "[CLIENT] Disparando ataque Slow HTTP (${ATTACK_MODE}) com ${ATTACKERS} conexoes..."
+        case "${ATTACK_MODE}" in
+            body|rudy)
+                ${SSH_CLIENT} "nohup slowhttptest -c ${ATTACKERS} -B -g -i 5 -r 200 -t POST -u http://${SERVER_IP}:80/ -s 1000000 -l $((DURATION + 5)) > /dev/null 2>&1 &"
+                ;;
+            read)
+                ${SSH_CLIENT} "nohup slowhttptest -c ${ATTACKERS} -X -g -i 5 -r 200 -t GET -u http://${SERVER_IP}:80/large.bin -l $((DURATION + 5)) > /dev/null 2>&1 &"
+                ;;
+            mixed)
+                local half=$((ATTACKERS / 2))
+                ${SSH_CLIENT} "nohup slowhttptest -c ${half} -H -g -i 5 -r 200 -t GET -u http://${SERVER_IP}:80/ -l $((DURATION + 5)) > /dev/null 2>&1 &"
+                ${SSH_CLIENT} "nohup slowhttptest -c ${half} -B -g -i 5 -r 200 -t POST -u http://${SERVER_IP}:80/ -s 1000000 -l $((DURATION + 5)) > /dev/null 2>&1 &"
+                ;;
+            stealth)
+                ${SSH_CLIENT} "nohup python3 /tmp/slowloris_suite.py ${SERVER_IP} -p 80 -m stealth -s ${ATTACKERS} -i 6 -d $((DURATION + 5)) > /dev/null 2>&1 &"
+                ;;
+            headers|*)
+                ${SSH_CLIENT} "nohup slowhttptest -c ${ATTACKERS} -H -g -i 5 -r 200 -t GET -u http://${SERVER_IP}:80/ -x 24 -p 3 -l $((DURATION + 5)) > /dev/null 2>&1 &"
+                ;;
+        esac
         sleep 3
 
         # 3. Dispara perfilador de hardware em paralelo com a carga legítima do wrk
