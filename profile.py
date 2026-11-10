@@ -32,10 +32,10 @@ pc.defineParameter("serverType", "Server hardware type",
                    longDescription="Hardware type for protected backend server. "
                    "r6615: single-socket 32 cores AMD EPYC 9354P, ConnectX-6 100G.")
 pc.defineParameter("linkSpeed", "Link speed (Kbps)",
-                   portal.ParameterType.BANDWIDTH, 100000000,
+                   portal.ParameterType.INTEGER, 100000000,
                    longDescription="100000000 = 100 Gbit/s.")
 pc.defineParameter("sameSwitch", "Keep all nodes on one switch",
-                   portal.ParameterType.BOOLEAN, True,
+                   portal.ParameterType.BOOLEAN, False,
                    longDescription="Minimizes latency and jitter. Uncheck if cluster lacks free nodes.")
 pc.defineParameter("image", "Disk image",
                    portal.ParameterType.IMAGE,
@@ -79,7 +79,7 @@ iface_server_in.addAddress(pg.IPv4Address("10.10.2.2", "255.255.255.0"))
 link0 = request.Link("link_client_kidds")
 link0.addInterface(iface_client_out)
 link0.addInterface(iface_kidds_in)
-link0.bandwidth = params.linkSpeed
+link0.bandwidth = int(params.linkSpeed)
 link0.setNoBandwidthShaping()
 if params.sameSwitch:
     link0.setNoInterSwitchLinks()
@@ -87,7 +87,7 @@ if params.sameSwitch:
 link1 = request.Link("link_kidds_server")
 link1.addInterface(iface_kidds_out)
 link1.addInterface(iface_server_in)
-link1.bandwidth = params.linkSpeed
+link1.bandwidth = int(params.linkSpeed)
 link1.setNoBandwidthShaping()
 if params.sameSwitch:
     link1.setNoInterSwitchLinks()
