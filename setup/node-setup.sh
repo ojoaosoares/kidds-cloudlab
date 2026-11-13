@@ -70,6 +70,17 @@ net.core.netdev_max_backlog=250000
 net.core.somaxconn=65535
 EOF
     sysctl --system || true
+
+    # Asymmetric cycle routing: Client -> KIDDS -> Server -> Client
+    IFACE=$(ip -4 -o addr show | awk '/10\.10\./ {print $2}' | head -n 1)
+    if [ -n "${IFACE}" ]; then
+        ip addr add 10.10.1.2/32 dev "${IFACE}" 2>/dev/null || true
+        ip route replace 10.10.1.0/24 via 10.10.2.2 dev "${IFACE}"
+        sysctl -w net.ipv4.conf.all.send_redirects=0
+        sysctl -w net.ipv4.conf.default.send_redirects=0
+        sysctl -w net.ipv4.conf."${IFACE}".send_redirects=0
+    fi
+
     done_ kidds_deps
 fi
 
@@ -106,6 +117,17 @@ server {
 EOF
     ln -sf /etc/nginx/sites-available/kidds-bench /etc/nginx/sites-enabled/default
     systemctl restart nginx
+
+    # Asymmetric cycle routing: Server -> Client is direct
+    IFACE=$(ip -4 -o addr show | awk '/10\.10\./ {print $2}' | head -n 1)
+    if [ -n "${IFACE}" ]; then
+        ip route replace 10.10.1.0/24 dev "${IFACE}" scope link
+        sysctl -w net.ipv4.ip_forward=1
+        sysctl -w net.ipv4.conf.all.send_redirects=0
+        sysctl -w net.ipv4.conf.default.send_redirects=0
+        sysctl -w net.ipv4.conf."${IFACE}".send_redirects=0
+    fi
+
     done_ server_deps
 fi
 
@@ -131,6 +153,16 @@ net.ipv4.tcp_fin_timeout=15
 net.core.somaxconn=65535
 EOF
     sysctl --system || true
+
+    # Asymmetric cycle routing: Client -> Server via KIDDS (10.10.1.2)
+    IFACE=$(ip -4 -o addr show | awk '/10\.10\./ {print $2}' | head -n 1)
+    if [ -n "${IFACE}" ]; then
+        ip route replace 10.10.2.0/24 via 10.10.1.2 dev "${IFACE}"
+        sysctl -w net.ipv4.conf.all.accept_redirects=0
+        sysctl -w net.ipv4.conf.default.accept_redirects=0
+        sysctl -w net.ipv4.conf."${IFACE}".accept_redirects=0
+    fi
+
     done_ client_deps
 fi
 
