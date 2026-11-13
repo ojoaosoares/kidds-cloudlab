@@ -75,21 +75,14 @@ iface_kidds_out.addAddress(pg.IPv4Address("10.10.2.1", "255.255.255.0"))
 iface_server_in = node_server.addInterface("if0")
 iface_server_in.addAddress(pg.IPv4Address("10.10.2.2", "255.255.255.0"))
 
-# 3. Create 100G Links
-link0 = request.Link("link_client_kidds")
-link0.addInterface(iface_client_out)
-link0.addInterface(iface_kidds_in)
-link0.bandwidth = int(params.linkSpeed)
-link0.setNoBandwidthShaping()
+# 3. Create shared LAN
+lan = request.LAN("shared_lan")
+lan.bandwidth = int(params.linkSpeed)
+lan.setNoBandwidthShaping()
+lan.addInterface(iface_client_out)
+lan.addInterface(iface_kidds_in)
+lan.addInterface(iface_kidds_out)
+lan.addInterface(iface_server_in)
 if params.sameSwitch:
-    link0.setNoInterSwitchLinks()
-
-link1 = request.Link("link_kidds_server")
-link1.addInterface(iface_kidds_out)
-link1.addInterface(iface_server_in)
-link1.bandwidth = int(params.linkSpeed)
-link1.setNoBandwidthShaping()
-if params.sameSwitch:
-    link1.setNoInterSwitchLinks()
-
+    lan.setNoInterSwitchLinks()
 pc.printRequestRSpec(request)
